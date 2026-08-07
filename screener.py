@@ -31,10 +31,29 @@ def screen_stocks(stock_data, min_price=30.0, max_price=500.0, min_bid_qty=0, mi
         df = df.sort_values(by="Volume", ascending=False).reset_index(drop=True)
     return df
 
-def get_detailed_stock_history(ticker, period="1mo", interval="1d"):
+def calculate_smma(series, period):
+    """
+    Calculates Smoothed Moving Average (SMMA) for a given pandas Series and period.
+    SMMA(i) = (Prev_SMMA * (N - 1) + Price(i)) / N
+    First value is simple SMA.
+    """
+    if len(series) < period:
+        return pd.Series([None] * len(series), index=series.index)
+    
+    smma = [None] * len(series)
+    sma = series.iloc[:period].mean()
+    smma[period - 1] = sma
+    
+    for i in range(period, len(series)):
+        smma[i] = (smma[i - 1] * (period - 1) + series.iloc[i]) / period
+        
+    return pd.Series(smma, index=series.index)
+
+def get_detailed_stock_history(ticker, period="1y", interval="1d"):
     """
     Fetches detailed historical data for a specific stock ticker.
     """
+
     try:
         stock = yf_history_direct(ticker, period, interval)
         return stock

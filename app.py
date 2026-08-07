@@ -2,7 +2,8 @@ import streamlit as st
 import pandas as pd
 import plotly.graph_objects as go
 from data_fetcher import get_nse_symbols, fetch_all_nse_prices
-from screener import screen_stocks, get_detailed_stock_history
+from screener import screen_stocks, get_detailed_stock_history, calculate_smma
+
 
 # Set page configuration with premium dark layout styling
 st.set_page_config(
@@ -105,9 +106,23 @@ if not df_display.empty:
     if selected_symbol:
         ticker = f"{selected_symbol}.NS"
         with st.spinner(f"Loading history for {selected_symbol}..."):
-            history = get_detailed_stock_history(ticker, period="3mo", interval="1d")
+            history = get_detailed_stock_history(ticker, period="1y", interval="1d")
             
         if not history.empty:
+            # Calculate technical indicators
+            history['SMMA20'] = calculate_smma(history['Close'], 20)
+            history['SMMA120'] = calculate_smma(history['Close'], 120)
+            
+            # Display latest SMMA values in metric columns
+            latest_price = history['Close'].iloc[-1]
+            latest_smma20 = history['SMMA20'].iloc[-1]
+            latest_smma120 = history['SMMA120'].iloc[-1]
+            
+            m1, m2, m3 = st.columns(3)
+            m1.metric("LTP (₹)", f"₹{latest_price:,.2f}")
+            m2.metric("SMMA (20)", f"₹{latest_smma20:,.2f}" if latest_smma20 is not None and not pd.isna(latest_smma20) else "N/A")
+            m3.metric("SMMA (120)", f"₹{latest_smma120:,.2f}" if latest_smma120 is not None and not pd.isna(latest_smma120) else "N/A")
+            
             # Interactive Candlestick Chart
             fig = go.Figure()
             fig.add_trace(go.Candlestick(
@@ -119,17 +134,24 @@ if not df_display.empty:
                 name="Price"
             ))
             
-            # Simple Moving Average lines
-            history['SMA20'] = history['Close'].rolling(window=20).mean()
+            # Add SMMA (20) line
             fig.add_trace(go.Scatter(
                 x=history.index,
-                y=history['SMA20'],
-                line=dict(color='rgba(255, 165, 0, 0.8)', width=1.5),
-                name="20 SMA"
+                y=history['SMMA20'],
+                line=dict(color='#ff9f43', width=1.5),
+                name="SMMA 20"
+            ))
+            
+            # Add SMMA (120) line
+            fig.add_trace(go.Scatter(
+                x=history.index,
+                y=history['SMMA120'],
+                line=dict(color='#00d2d3', width=1.5),
+                name="SMMA 120"
             ))
             
             fig.update_layout(
-                title=f"{selected_symbol} - 3 Month Price Trend",
+                title=f"{selected_symbol} - 1 Year Price & SMMA Trends",
                 template="plotly_dark",
                 xaxis_rangeslider_visible=False,
                 margin=dict(l=20, r=20, t=40, b=20),
@@ -138,5 +160,6 @@ if not df_display.empty:
             st.plotly_chart(fig, use_container_width=True)
         else:
             st.warning("No historical data available for the selected symbol.")
+
 else:
     st.info("No stocks match the screening criteria.")
