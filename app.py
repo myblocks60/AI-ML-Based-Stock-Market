@@ -41,6 +41,14 @@ min_price, max_price = st.sidebar.slider(
     step=5.0
 )
 
+# Bid and Ask Liquidity Filters
+apply_liquidity = st.sidebar.checkbox("Filter by Liquidity (Bid/Ask)", value=True)
+if apply_liquidity:
+    min_bid = st.sidebar.number_input("Min Bid Quantity", min_value=0, value=1000000, step=100000)
+    min_ask = st.sidebar.number_input("Min Ask Quantity", min_value=0, value=1000000, step=100000)
+else:
+    min_bid, min_ask = 0, 0
+
 # Limit the number of symbols scanned to speed up Streamlit load time, or scan full list
 scan_limit = st.sidebar.number_input("Maximum Stocks to Scan", min_value=10, max_value=2000, value=200)
 
@@ -53,7 +61,14 @@ with st.spinner("Fetching real-time stock prices..."):
     raw_data = load_and_fetch_stock_data(scan_limit)
 
 # Screen the stocks
-df_screened = screen_stocks(raw_data, min_price=min_price, max_price=max_price)
+df_screened = screen_stocks(
+    raw_data,
+    min_price=min_price,
+    max_price=max_price,
+    min_bid_qty=min_bid,
+    min_ask_qty=min_ask
+)
+
 
 # Top KPI metrics
 if not df_screened.empty:
