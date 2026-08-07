@@ -81,3 +81,20 @@ def calculate_etq(ticker):
     except Exception:
         return 0, 0, 0
 
+def calculate_avg_price(ticker):
+    """
+    Calculates the average Close price (LTP) for the last 20 and 60 minutes.
+    """
+    try:
+        import yfinance as yf
+        df = yf.Ticker(ticker).history(period="5d", interval="1m")
+        if df.empty:
+            return 0.0, 0.0
+        
+        avg_20 = float(df['Close'].iloc[-20:].mean()) if len(df) >= 20 else float(df['Close'].mean())
+        avg_60 = float(df['Close'].iloc[-60:].mean()) if len(df) >= 60 else float(df['Close'].mean())
+        return avg_20, avg_60
+    except Exception:
+        return 0.0, 0.0
+
+

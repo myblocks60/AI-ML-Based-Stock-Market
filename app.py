@@ -2,7 +2,7 @@ import streamlit as st
 import pandas as pd
 import plotly.graph_objects as go
 from data_fetcher import get_nse_symbols, fetch_all_nse_prices
-from screener import screen_stocks, get_detailed_stock_history, calculate_smma, calculate_etq
+from screener import screen_stocks, get_detailed_stock_history, calculate_smma, calculate_etq, calculate_avg_price
 
 
 # Set page configuration with premium dark layout styling
@@ -109,10 +109,11 @@ if not df_display.empty:
             history = get_detailed_stock_history(ticker, period="1y", interval="1d")
             
         if not history.empty:
-            # Calculate technical indicators & ETQ
+            # Calculate technical indicators, ETQ, & Average Price
             history['SMMA20'] = calculate_smma(history['Close'], 20)
             history['SMMA120'] = calculate_smma(history['Close'], 120)
             etq5, etq20, etq60 = calculate_etq(ticker)
+            avg20, avg60 = calculate_avg_price(ticker)
             
             # Display latest SMMA values in metric columns
             latest_price = history['Close'].iloc[-1]
@@ -129,6 +130,12 @@ if not df_display.empty:
             e1.metric("ETQ (Last 5 mins)", f"{etq5:,}")
             e2.metric("ETQ (Last 20 mins)", f"{etq20:,}")
             e3.metric("ETQ (Last 60 mins)", f"{etq60:,}")
+            
+            st.write("#### 💵 Average Price (LTP)")
+            ap1, ap2 = st.columns(2)
+            ap1.metric("Avg Price (Last 20 mins)", f"₹{avg20:,.2f}")
+            ap2.metric("Avg Price (Last 60 mins)", f"₹{avg60:,.2f}")
+
             
             # Interactive Candlestick Chart
 
