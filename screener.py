@@ -63,3 +63,21 @@ def get_detailed_stock_history(ticker, period="1y", interval="1d"):
 def yf_history_direct(ticker, period, interval):
     import yfinance as yf
     return yf.Ticker(ticker).history(period=period, interval=interval)
+
+def calculate_etq(ticker):
+    """
+    Calculates Exchange Traded Quantity (ETQ) for the last 5, 20, and 60 minutes.
+    """
+    try:
+        import yfinance as yf
+        df = yf.Ticker(ticker).history(period="5d", interval="1m")
+        if df.empty:
+            return 0, 0, 0
+        
+        last_5 = int(df['Volume'].iloc[-5:].sum()) if len(df) >= 5 else int(df['Volume'].sum())
+        last_20 = int(df['Volume'].iloc[-20:].sum()) if len(df) >= 20 else int(df['Volume'].sum())
+        last_60 = int(df['Volume'].iloc[-60:].sum()) if len(df) >= 60 else int(df['Volume'].sum())
+        return last_5, last_20, last_60
+    except Exception:
+        return 0, 0, 0
+
