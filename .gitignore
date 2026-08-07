@@ -1,0 +1,86 @@
+# =========================
+# Python
+# =========================
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+
+# Virtual Environments
+venv/
+env/
+ENV/
+.venv/
+
+# Distribution / Packaging
+build/
+dist/
+*.egg-info/
+.eggs/
+
+# Logs
+*.log
+
+# Unit Test / Coverage
+.pytest_cache/
+.coverage
+.coverage.*
+htmlcov/
+.tox/
+.nox/
+
+# Jupyter
+.ipynb_checkpoints/
+
+# Type Checkers
+.mypy_cache/
+.pyre/
+.pytype/
+
+# IDEs
+.vscode/
+.idea/
+
+# OS Files
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Environment Variables
+.env
+.env.*
+!.env.example
+
+# Streamlit
+.streamlit/secrets.toml
+
+# Cache
+.cache/
+
+# SQLite
+*.db
+*.sqlite3
+
+# Temporary Files
+*.tmp
+*.temp
+
+# =========================
+# Optional: Ignore model files
+# Uncomment if required
+# =========================
+# *.pkl
+# *.joblib
+# *.h5
+# *.keras
+# *.onnx
+# *.pt
+# *.pth
+
+# =========================
+# Optional: Ignore downloaded datasets
+# Uncomment if required
+# =========================
+# data/
+# datasets/
+# downloads/
