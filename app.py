@@ -45,10 +45,6 @@ if "fyers_token" not in st.session_state:
 if "fyers_client_id" not in st.session_state:
     st.session_state["fyers_client_id"] = ""
 
-fyers_client_id = st.sidebar.text_input("App ID (Client ID)", value=st.session_state["fyers_client_id"])
-fyers_secret = st.sidebar.text_input("Secret ID", type="password")
-fyers_redirect = st.sidebar.text_input("Redirect URI", value="http://localhost:8501/")
-
 if st.session_state["fyers_token"]:
     st.sidebar.success("🟢 Authenticated with Fyers")
     if st.sidebar.button("Logout"):
@@ -56,6 +52,11 @@ if st.session_state["fyers_token"]:
         st.rerun()
 else:
     st.sidebar.info("🔴 Running Demo Mode (YFinance)")
+    fyers_client_id = st.sidebar.text_input("App ID (Client ID)", value=st.session_state["fyers_client_id"], type="password")
+    fyers_secret = st.sidebar.text_input("Secret ID", type="password")
+
+    fyers_redirect = st.sidebar.text_input("Redirect URI", value="http://localhost:8501/")
+    
     if fyers_client_id and fyers_secret and fyers_redirect:
         from fyers_client import get_session_model, generate_auth_link, get_access_token
         try:
@@ -80,6 +81,7 @@ def load_and_fetch_stock_data(limit, fyers_token, fyers_client_id):
     return fetch_all_nse_prices(
         symbols, fyers_token=fyers_token, fyers_client_id=fyers_client_id
     )
+
 
 with st.spinner("Fetching real-time stock data..."):
     raw_data = load_and_fetch_stock_data(
