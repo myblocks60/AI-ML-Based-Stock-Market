@@ -4,7 +4,7 @@ import plotly.graph_objects as go
 import time
 from data_fetcher import get_nse_symbols, fetch_all_nse_prices
 from screener import screen_stocks, get_detailed_stock_history, calculate_smma, calculate_batch_metrics
-from ml_analysis import analyze_crossover_signal
+from ml_analysis import analyze_crossover_signal, get_all_historical_crossovers
 
 # Set page configuration with premium dark layout styling
 st.set_page_config(
@@ -117,10 +117,19 @@ if not df_display.empty:
             st.write("---")
             st.write("### 🤖 AI/ML Crossover Signal Analysis")
             if "ACCEPT" in signal:
-                st.success(f"**Recommendation: {signal}**\n\n**Confidence**: {confidence:.1f}%\n\n*Details: {ml_desc}*")
+                st.success(f"**Current Recommendation: {signal}**\n\n**Confidence**: {confidence:.1f}%\n\n*Details: {ml_desc}*")
             else:
-                st.warning(f"**Recommendation: {signal}**\n\n**Confidence**: {confidence:.1f}%\n\n*Details: {ml_desc}*")
+                st.warning(f"**Current Recommendation: {signal}**\n\n**Confidence**: {confidence:.1f}%\n\n*Details: {ml_desc}*")
+            
+            # Display all detected crossovers
+            st.write("**📜 Detected Historical Crossover Signals & ML Evaluations**")
+            df_crossovers = get_all_historical_crossovers(history)
+            if not df_crossovers.empty:
+                st.dataframe(df_crossovers, use_container_width=True, hide_index=True)
+            else:
+                st.info("No historical SMMA crossover signals detected for this stock in the 1-year period.")
             st.write("---")
+
 
             
             fig = go.Figure()

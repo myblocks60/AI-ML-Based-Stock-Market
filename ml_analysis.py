@@ -109,3 +109,71 @@ def analyze_crossover_signal(history, bid_qty=0, ask_qty=0):
     action = "ACCEPT" if accept_prob >= 0.5 else "AVOID"
     
     return f"{action} - {signal_type}", confidence, f"Trained on {len(dataset)} historical crossover signals."
+
+def get_all_historical_crossovers(history):
+    """
+    Identifies all historical SMMA crossover events in the dataframe.
+    For each crossover, runs the feature analysis and predicts:
+      - Crossover Type (Golden/Death Cross)
+      - Recommendation (ACCEPT / AVOID)
+      - Confidence (%)
+      - Reason / Explanation
+    Returns a pandas DataFrame.
+    """
+    if len(history) < 130:
+        return pd.DataFrame()
+        
+    history = history.copy()
+    if 'SMMA20' not in history.columns:
+        history['SMMA20'] = calculate_smma(history['Close'], 20)
+    if 'SMMA120' not in history.columns:
+        history['SMMA120'] = calculate_smma(history['Close'], 120)
+        
+    history['Diff'] = history['SMMA20'] - history['SMMA120']
+    history['Prev_Diff'] = history['Diff'].shift(1)
+    
+    crossover_idx = history[(history['Diff'] * history['Prev_Diff'] < 0) & (history['Diff'].notna()) & (history['Prev_Diff'].notna())].index
+    
+    records = []
+    for idx in crossover_idx:
+        pos = history.index.get_loc(idx)
+        vol_sma20 = history['Volume'].iloc[max(0, pos-20):pos].mean()
+        vol_ratio = history['Volume'].iloc[pos] / vol_sma20 if vol_sma20 > 0 else 1.0
+        smma120_slope = (history['SMMA120'].iloc[pos] - history['SMMA120'].iloc[max(0, pos-5)]) / history['SMMA120'].iloc[max(0, pos-5)] if history['SMMA120'].iloc[max(0, pos-5)] else 0.0
+        price_to_smma20 = (history['Close'].iloc[pos] - history['SMMA20'].iloc[pos]) / history['SMMA20'].iloc[pos] if history['SMMA20'].iloc[pos] else 0.0
+        
+        is_bullish = history['Diff'].iloc[pos] > 0
+        signal_type = "Golden Cross (Bullish)" if is_bullish else "Death Cross (Bearish)"
+        
+        reasons = []
+        is_profitable = True
+        
+        if abs(smma120_slope) < 0.001:
+            reasons.append("SMMA(120) is flat (ranging market, high whipsaw risk)")
+            is_profitable = False
+        if vol_ratio < 1.1:
+            reasons.append("Low volume breakout")
+            is_profitable = False
+        else:
+            reasons.append(f"Volume expansion ({vol_ratio:.1f}x)")
+            
+        if is_bullish:
+            if price_to_smma20 > 0.05:
+                reasons.append("Price overextended above SMMA(20)")
+                is_profitable = False
+        
+        action = "ACCEPT" if is_profitable else "AVOID"
+        confidence = 85.0 if is_profitable else 70.0
+        explanation = " | ".join(reasons) if reasons else "No clear breakout patterns identified."
+        
+        records.append({
+            "Date": idx.strftime("%Y-%m-%d") if hasattr(idx, 'strftime') else str(idx),
+            "Price (₹)": round(history['Close'].iloc[pos], 2),
+            "Signal Type": signal_type,
+            "Prediction": action,
+            "Confidence": f"{confidence:.1f}%",
+            "Rationale / Explanation": explanation
+        })
+        
+    return pd.DataFrame(records).sort_values(by="Date", ascending=False).reset_index(drop=True)
+
