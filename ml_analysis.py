@@ -137,43 +137,58 @@ def get_all_historical_crossovers(history):
     records = []
     for idx in crossover_idx:
         pos = history.index.get_loc(idx)
+        
+        # Calculate profitability (5 days ahead)
+        future_pos = min(pos + 5, len(history) - 1)
+        current_price = history['Close'].iloc[pos]
+        future_price = history['Close'].iloc[future_pos]
+        
+        buy_pct = ((future_price - current_price) / current_price) * 100
+        sell_pct = ((current_price - future_price) / current_price) * 100
+        
+        buy_profit = f"Profitable (+{buy_pct:.1f}%)" if buy_pct > 0 else f"Loss ({buy_pct:.1f}%)"
+        sell_profit = f"Profitable (+{sell_pct:.1f}%)" if sell_pct > 0 else f"Loss ({sell_pct:.1f}%)"
+        
         vol_sma20 = history['Volume'].iloc[max(0, pos-20):pos].mean()
         vol_ratio = history['Volume'].iloc[pos] / vol_sma20 if vol_sma20 > 0 else 1.0
         smma120_slope = (history['SMMA120'].iloc[pos] - history['SMMA120'].iloc[max(0, pos-5)]) / history['SMMA120'].iloc[max(0, pos-5)] if history['SMMA120'].iloc[max(0, pos-5)] else 0.0
         price_to_smma20 = (history['Close'].iloc[pos] - history['SMMA20'].iloc[pos]) / history['SMMA20'].iloc[pos] if history['SMMA20'].iloc[pos] else 0.0
         
         is_bullish = history['Diff'].iloc[pos] > 0
-        signal_type = "Golden Cross (Bullish)" if is_bullish else "Death Cross (Bearish)"
+        signal_type = "Golden Cross (Buy)" if is_bullish else "Death Cross (Sell)"
         
         reasons = []
         is_profitable = True
         
+        # ML / Heuristic observation rules
         if abs(smma120_slope) < 0.001:
-            reasons.append("SMMA(120) is flat (ranging market, high whipsaw risk)")
+            reasons.append("Flat SMMA(120) indicates no trend / high whipsaw risk")
             is_profitable = False
         if vol_ratio < 1.1:
-            reasons.append("Low volume breakout")
+            reasons.append("Low volume crossover suggests lack of breakout conviction")
             is_profitable = False
         else:
-            reasons.append(f"Volume expansion ({vol_ratio:.1f}x)")
+            reasons.append(f"Volume breakout observed ({vol_ratio:.1f}x)")
             
-        if is_bullish:
-            if price_to_smma20 > 0.05:
-                reasons.append("Price overextended above SMMA(20)")
-                is_profitable = False
-        
+        if is_bullish and price_to_smma20 > 0.05:
+            reasons.append("Price is overextended above support")
+            is_profitable = False
+            
         action = "ACCEPT" if is_profitable else "AVOID"
         confidence = 85.0 if is_profitable else 70.0
-        explanation = " | ".join(reasons) if reasons else "No clear breakout patterns identified."
+        explanation = " | ".join(reasons) if reasons else "Normal market behavior."
         
         records.append({
             "Date": idx.strftime("%Y-%m-%d") if hasattr(idx, 'strftime') else str(idx),
-            "Price (₹)": round(history['Close'].iloc[pos], 2),
+            "Price (₹)": round(current_price, 2),
             "Signal Type": signal_type,
-            "Prediction": action,
+            "Buy Profit (5d)": buy_profit,
+            "Sell Profit (5d)": sell_profit,
+            "ML Recommendation": action,
             "Confidence": f"{confidence:.1f}%",
-            "Rationale / Explanation": explanation
+            "Market Observations / Rationale": explanation
         })
         
     return pd.DataFrame(records).sort_values(by="Date", ascending=False).reset_index(drop=True)
+
 
