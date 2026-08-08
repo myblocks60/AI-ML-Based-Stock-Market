@@ -140,25 +140,39 @@ def get_all_historical_crossovers(history):
         current_price = history['Close'].iloc[pos]
         is_bullish = history['Diff'].iloc[pos] > 0
         
-        # Simulated Buy Trade logic: Hold until next crossover below (Death Cross)
         exit_price, exit_date, pl_text = 0.0, "N/A", "N/A"
+        next_crosses = [c for c in crossover_idx if c > idx]
+        
         if is_bullish:
-            # Find next sell cross
-            next_crosses = [c for c in crossover_idx if c > idx]
+            # Buy Trade: Exit on next Sell signal (Death Cross)
             next_sell = None
             for c in next_crosses:
                 if history['Diff'].loc[c] < 0:
                     next_sell = c
                     break
-            
             if next_sell is not None:
                 exit_price = history['Close'].loc[next_sell]
                 exit_date = next_sell.strftime("%Y-%m-%d")
             else:
                 exit_price = history['Close'].iloc[-1]
                 exit_date = "Open Position"
-                
             pl = exit_price - current_price
+            pl_pct = (pl / current_price) * 100
+            pl_text = f"₹{pl:+.2f} ({pl_pct:+.1f}%)"
+        else:
+            # Sell Trade: Exit on next Buy signal (Golden Cross)
+            next_buy = None
+            for c in next_crosses:
+                if history['Diff'].loc[c] > 0:
+                    next_buy = c
+                    break
+            if next_buy is not None:
+                exit_price = history['Close'].loc[next_buy]
+                exit_date = next_buy.strftime("%Y-%m-%d")
+            else:
+                exit_price = history['Close'].iloc[-1]
+                exit_date = "Open Position"
+            pl = current_price - exit_price
             pl_pct = (pl / current_price) * 100
             pl_text = f"₹{pl:+.2f} ({pl_pct:+.1f}%)"
             
@@ -177,7 +191,6 @@ def get_all_historical_crossovers(history):
             is_profitable = False
             
         action = "ACCEPT" if is_profitable else "AVOID"
-        confidence = 85.0 if is_profitable else 70.0
         explanation = " | ".join(reasons) if reasons else "Strong trend breakout."
         
         records.append({
@@ -192,6 +205,3 @@ def get_all_historical_crossovers(history):
         })
         
     return pd.DataFrame(records).sort_values(by="Date", ascending=False).reset_index(drop=True)
-
-
-
