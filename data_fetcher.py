@@ -113,13 +113,23 @@ def fetch_ltp_chunk(tickers):
         
     return results
 
-def fetch_all_nse_prices(symbols, chunk_size=100, max_workers=5):
+def fetch_all_nse_prices(symbols, chunk_size=100, max_workers=5, fyers_token=None, fyers_client_id=None):
     """
-    Fetches prices for all symbols using multi-threading to speed up retrieval.
+    Fetches prices for all symbols using Fyers if authenticated, otherwise multi-threaded Yahoo Finance.
     """
+    if fyers_token and fyers_client_id:
+        fyers_syms = [f"NSE:{sym.replace('.NS', '')}-EQ" for sym in symbols]
+        chunk_size_fyers = 50
+        chunks = [fyers_syms[i:i + chunk_size_fyers] for i in range(0, len(fyers_syms), chunk_size_fyers)]
+        from fyers_client import fetch_fyers_quotes
+        all_results = {}
+        for chunk in chunks:
+            res = fetch_fyers_quotes(fyers_token, fyers_client_id, chunk)
+            all_results.update(res)
+        return all_results
+
     chunks = [symbols[i:i + chunk_size] for i in range(0, len(symbols), chunk_size)]
     all_results = {}
-    
     with ThreadPoolExecutor(max_workers=max_workers) as executor:
         futures = {executor.submit(fetch_ltp_chunk, chunk): chunk for chunk in chunks}
         for future in futures:
@@ -128,5 +138,5 @@ def fetch_all_nse_prices(symbols, chunk_size=100, max_workers=5):
                 all_results.update(res)
             except Exception as e:
                 print(f"Chunk fetch error: {e}")
-                
     return all_results
+

@@ -36,13 +36,56 @@ else:
 scan_limit = st.sidebar.number_input("Maximum Stocks to Scan", min_value=10, max_value=500, value=50)
 refresh_interval = st.sidebar.slider("Auto Refresh Interval (sec)", min_value=5, max_value=60, value=10, step=5)
 
-@st.cache_data(ttl=300)
-def load_and_fetch_stock_data(limit):
-    symbols = get_nse_symbols()[:limit]
-    return fetch_all_nse_prices(symbols)
+# Fyers Broker Integration
+st.sidebar.markdown("---")
+st.sidebar.header("🔌 Fyers Broker API")
 
-with st.spinner("Fetching real-time stock prices..."):
-    raw_data = load_and_fetch_stock_data(scan_limit)
+if "fyers_token" not in st.session_state:
+    st.session_state["fyers_token"] = None
+if "fyers_client_id" not in st.session_state:
+    st.session_state["fyers_client_id"] = ""
+
+fyers_client_id = st.sidebar.text_input("App ID (Client ID)", value=st.session_state["fyers_client_id"])
+fyers_secret = st.sidebar.text_input("Secret ID", type="password")
+fyers_redirect = st.sidebar.text_input("Redirect URI", value="http://localhost:8501/")
+
+if st.session_state["fyers_token"]:
+    st.sidebar.success("🟢 Authenticated with Fyers")
+    if st.sidebar.button("Logout"):
+        st.session_state["fyers_token"] = None
+        st.rerun()
+else:
+    st.sidebar.info("🔴 Running Demo Mode (YFinance)")
+    if fyers_client_id and fyers_secret and fyers_redirect:
+        from fyers_client import get_session_model, generate_auth_link, get_access_token
+        try:
+            session = get_session_model(fyers_client_id, fyers_secret, fyers_redirect)
+            auth_url = generate_auth_link(session)
+            st.sidebar.markdown(f"[🔗 Generate Auth Code]({auth_url})", unsafe_allow_html=True)
+            auth_code = st.sidebar.text_input("Enter Redirect URL or Auth Code:")
+            if auth_code:
+                if "auth_code=" in auth_code:
+                    auth_code = auth_code.split("auth_code=")[1].split("&")[0]
+                token = get_access_token(session, auth_code)
+                if token:
+                    st.session_state["fyers_token"] = token
+                    st.session_state["fyers_client_id"] = fyers_client_id
+                    st.rerun()
+        except Exception as e:
+            st.sidebar.error(f"Config Error: {e}")
+
+@st.cache_data(ttl=10)
+def load_and_fetch_stock_data(limit, fyers_token, fyers_client_id):
+    symbols = get_nse_symbols()[:limit]
+    return fetch_all_nse_prices(
+        symbols, fyers_token=fyers_token, fyers_client_id=fyers_client_id
+    )
+
+with st.spinner("Fetching real-time stock data..."):
+    raw_data = load_and_fetch_stock_data(
+        scan_limit, st.session_state["fyers_token"], st.session_state["fyers_client_id"]
+    )
+
 
 # Screen the stocks based on Price and Liquidity
 df_screened = screen_stocks(
