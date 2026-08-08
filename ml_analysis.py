@@ -198,10 +198,11 @@ def get_all_historical_crossovers(history):
             "Signal": "Buy (Golden)" if is_bullish else "Sell (Death)",
             "Entry LTP (₹)": round(current_price, 2),
             "Exit Date": exit_date,
-            "Exit LTP (₹)": round(exit_price, 2) if exit_price else "-",
+            "Exit LTP (₹)": round(exit_price, 2) if exit_price else None,
             "Trade P/L": pl_text,
             "ML Recommendation": action,
             "Market Observations": explanation
         })
+
         
     return pd.DataFrame(records).sort_values(by="Date", ascending=False).reset_index(drop=True)
