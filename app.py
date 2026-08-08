@@ -4,6 +4,7 @@ import plotly.graph_objects as go
 import time
 from data_fetcher import get_nse_symbols, fetch_all_nse_prices
 from screener import screen_stocks, get_detailed_stock_history, calculate_smma, calculate_batch_metrics
+from ml_analysis import analyze_crossover_signal
 
 # Set page configuration with premium dark layout styling
 st.set_page_config(
@@ -101,12 +102,26 @@ if not df_display.empty:
         c3.write("**💵 Average Price & Indicators**")
         c3.info(f"Avg LTP 20m: ₹{row.get('Avg Price 20m', 0.0):,.2f}\n\nAvg LTP 60m: ₹{row.get('Avg Price 60m', 0.0):,.2f}\n\nSMMA(20): ₹{row.get('SMMA(20)'):,.2f}\n\nSMMA(120): ₹{row.get('SMMA(120)'):,.2f}")
         
-        with st.spinner("Loading candlestick history..."):
+        with st.spinner("Loading candlestick history & running AI/ML analysis..."):
             history = get_detailed_stock_history(ticker, period="1y", interval="1d")
             
         if not history.empty:
             history['SMMA20'] = calculate_smma(history['Close'], 20)
             history['SMMA120'] = calculate_smma(history['Close'], 120)
+            
+            # Run AI/ML Signal Analysis
+            signal, confidence, ml_desc = analyze_crossover_signal(
+                history, bid_qty=row.get('Bid Qty', 0), ask_qty=row.get('Ask Qty', 0)
+            )
+            
+            st.write("---")
+            st.write("### 🤖 AI/ML Crossover Signal Analysis")
+            if "ACCEPT" in signal:
+                st.success(f"**Recommendation: {signal}**\n\n**Confidence**: {confidence:.1f}%\n\n*Details: {ml_desc}*")
+            else:
+                st.warning(f"**Recommendation: {signal}**\n\n**Confidence**: {confidence:.1f}%\n\n*Details: {ml_desc}*")
+            st.write("---")
+
             
             fig = go.Figure()
             fig.add_trace(go.Candlestick(
