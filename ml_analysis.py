@@ -137,58 +137,61 @@ def get_all_historical_crossovers(history):
     records = []
     for idx in crossover_idx:
         pos = history.index.get_loc(idx)
-        
-        # Calculate profitability (5 days ahead)
-        future_pos = min(pos + 5, len(history) - 1)
         current_price = history['Close'].iloc[pos]
-        future_price = history['Close'].iloc[future_pos]
+        is_bullish = history['Diff'].iloc[pos] > 0
         
-        buy_pct = ((future_price - current_price) / current_price) * 100
-        sell_pct = ((current_price - future_price) / current_price) * 100
-        
-        buy_profit = f"Profitable (+{buy_pct:.1f}%)" if buy_pct > 0 else f"Loss ({buy_pct:.1f}%)"
-        sell_profit = f"Profitable (+{sell_pct:.1f}%)" if sell_pct > 0 else f"Loss ({sell_pct:.1f}%)"
-        
+        # Simulated Buy Trade logic: Hold until next crossover below (Death Cross)
+        exit_price, exit_date, pl_text = 0.0, "N/A", "N/A"
+        if is_bullish:
+            # Find next sell cross
+            next_crosses = [c for c in crossover_idx if c > idx]
+            next_sell = None
+            for c in next_crosses:
+                if history['Diff'].loc[c] < 0:
+                    next_sell = c
+                    break
+            
+            if next_sell is not None:
+                exit_price = history['Close'].loc[next_sell]
+                exit_date = next_sell.strftime("%Y-%m-%d")
+            else:
+                exit_price = history['Close'].iloc[-1]
+                exit_date = "Open Position"
+                
+            pl = exit_price - current_price
+            pl_pct = (pl / current_price) * 100
+            pl_text = f"₹{pl:+.2f} ({pl_pct:+.1f}%)"
+            
         vol_sma20 = history['Volume'].iloc[max(0, pos-20):pos].mean()
         vol_ratio = history['Volume'].iloc[pos] / vol_sma20 if vol_sma20 > 0 else 1.0
         smma120_slope = (history['SMMA120'].iloc[pos] - history['SMMA120'].iloc[max(0, pos-5)]) / history['SMMA120'].iloc[max(0, pos-5)] if history['SMMA120'].iloc[max(0, pos-5)] else 0.0
-        price_to_smma20 = (history['Close'].iloc[pos] - history['SMMA20'].iloc[pos]) / history['SMMA20'].iloc[pos] if history['SMMA20'].iloc[pos] else 0.0
-        
-        is_bullish = history['Diff'].iloc[pos] > 0
-        signal_type = "Golden Cross (Buy)" if is_bullish else "Death Cross (Sell)"
         
         reasons = []
         is_profitable = True
         
-        # ML / Heuristic observation rules
         if abs(smma120_slope) < 0.001:
-            reasons.append("Flat SMMA(120) indicates no trend / high whipsaw risk")
+            reasons.append("Flat SMMA(120) / high whipsaw risk")
             is_profitable = False
         if vol_ratio < 1.1:
-            reasons.append("Low volume crossover suggests lack of breakout conviction")
-            is_profitable = False
-        else:
-            reasons.append(f"Volume breakout observed ({vol_ratio:.1f}x)")
-            
-        if is_bullish and price_to_smma20 > 0.05:
-            reasons.append("Price is overextended above support")
+            reasons.append("Low volume breakout conviction")
             is_profitable = False
             
         action = "ACCEPT" if is_profitable else "AVOID"
         confidence = 85.0 if is_profitable else 70.0
-        explanation = " | ".join(reasons) if reasons else "Normal market behavior."
+        explanation = " | ".join(reasons) if reasons else "Strong trend breakout."
         
         records.append({
             "Date": idx.strftime("%Y-%m-%d") if hasattr(idx, 'strftime') else str(idx),
-            "Price (₹)": round(current_price, 2),
-            "Signal Type": signal_type,
-            "Buy Profit (5d)": buy_profit,
-            "Sell Profit (5d)": sell_profit,
+            "Signal": "Buy (Golden)" if is_bullish else "Sell (Death)",
+            "Entry LTP (₹)": round(current_price, 2),
+            "Exit Date": exit_date,
+            "Exit LTP (₹)": round(exit_price, 2) if exit_price else "-",
+            "Trade P/L": pl_text,
             "ML Recommendation": action,
-            "Confidence": f"{confidence:.1f}%",
-            "Market Observations / Rationale": explanation
+            "Market Observations": explanation
         })
         
     return pd.DataFrame(records).sort_values(by="Date", ascending=False).reset_index(drop=True)
+
 
 
