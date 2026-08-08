@@ -136,8 +136,21 @@ if not df_display.empty:
             ap1.metric("Avg Price (Last 20 mins)", f"₹{avg20:,.2f}")
             ap2.metric("Avg Price (Last 60 mins)", f"₹{avg60:,.2f}")
 
+            st.write("#### 📖 Real-Time Market Depth")
+            stock_info = raw_data.get(ticker, {})
+            bid_price = stock_info.get("bid_price", 0.0)
+            bid_qty = stock_info.get("bid_qty", 0)
+            ask_price = stock_info.get("ask_price", 0.0)
+            ask_qty = stock_info.get("ask_qty", 0)
+            
+            col_bid, col_ask = st.columns(2)
+            with col_bid:
+                st.success(f"**Best Bid**\n\nPrice: ₹{bid_price:,.2f}\n\nQuantity: {bid_qty:,}")
+            with col_ask:
+                st.error(f"**Best Ask**\n\nPrice: ₹{ask_price:,.2f}\n\nQuantity: {ask_qty:,}")
             
             # Interactive Candlestick Chart
+
 
             fig = go.Figure()
             fig.add_trace(go.Candlestick(

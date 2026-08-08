@@ -21,9 +21,12 @@ def screen_stocks(stock_data, min_price=30.0, max_price=500.0, min_bid_qty=0, mi
                     "LTP (₹)": round(ltp, 2),
                     "Change (%)": round(info.get("change_pct", 0.0), 2),
                     "Volume": info.get("volume", 0),
+                    "Bid Price": info.get("bid_price", 0.0),
                     "Bid Qty": bid_qty,
+                    "Ask Price": info.get("ask_price", 0.0),
                     "Ask Qty": ask_qty
                 })
+
 
             
     df = pd.DataFrame(records)
