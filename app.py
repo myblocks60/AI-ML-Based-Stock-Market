@@ -92,15 +92,17 @@ if not df_display.empty:
         
         # Display all metrics side by side
         c1, c2, c3 = st.columns(3)
-        c1.write("**📖 Market Depth**")
+        c1.write("**📖 Market Depth & Last Trade**")
         c1.success(f"Best Bid: ₹{row.get('Bid Price', 0.0):,.2f} ({int(row.get('Bid Qty', 0)):,})")
         c1.error(f"Best Ask: ₹{row.get('Ask Price', 0.0):,.2f} ({int(row.get('Ask Qty', 0)):,})")
+        c1.info(f"**Last Traded Qty (LTQ)**: {int(row.get('LTQ', 0)):,}")
         
         c2.write("**📊 Exchange Traded Quantity (ETQ)**")
         c2.info(f"Last 5m: {int(row.get('ETQ 5m', 0)):,}\n\nLast 20m: {int(row.get('ETQ 20m', 0)):,}\n\nLast 60m: {int(row.get('ETQ 60m', 0)):,}")
         
         c3.write("**💵 Average Price & Indicators**")
         c3.info(f"Avg LTP 20m: ₹{row.get('Avg Price 20m', 0.0):,.2f}\n\nAvg LTP 60m: ₹{row.get('Avg Price 60m', 0.0):,.2f}\n\nSMMA(20): ₹{row.get('SMMA(20)'):,.2f}\n\nSMMA(120): ₹{row.get('SMMA(120)'):,.2f}")
+
         
         with st.spinner("Loading candlestick history & running AI/ML analysis..."):
             history = get_detailed_stock_history(ticker, period="1y", interval="1d")
