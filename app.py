@@ -1,48 +1,30 @@
 import streamlit as st
 import pandas as pd
 import plotly.graph_objects as go
+import time
 from data_fetcher import get_nse_symbols, fetch_all_nse_prices
-from screener import screen_stocks, get_detailed_stock_history, calculate_smma, calculate_etq, calculate_avg_price
-
+from screener import screen_stocks, get_detailed_stock_history, calculate_smma, calculate_batch_metrics
 
 # Set page configuration with premium dark layout styling
 st.set_page_config(
-    page_title="AeroScreen - Real-Time NSE Stock Screener",
+    page_title="AeroScreen - Live NSE Stock Dashboard",
     page_icon="📈",
     layout="wide",
     initial_sidebar_state="expanded"
 )
 
 # Custom CSS for modern, premium look with dark-mode aesthetic
-st.markdown("""
-<style>
-    .reportview-container {
-        background: #0d1117;
-    }
-    .metric-card {
-        background: rgba(255, 255, 255, 0.05);
-        border: 1px solid rgba(255, 255, 255, 0.1);
-        border-radius: 8px;
-        padding: 15px;
-        text-align: center;
-    }
-</style>
-""", unsafe_allow_html=True)
+st.markdown("<style>.reportview-container { background: #0d1117; }</style>", unsafe_allow_html=True)
 
-st.title("📈 AeroScreen")
-st.subheader("Real-Time NSE Stock Screener & Technical Analyzer")
+st.title("📈 AeroScreen Live Dashboard")
+st.subheader("Real-Time Tabular Stock Market Screening & Analysis")
 
 # Sidebar Configuration
 st.sidebar.header("Filter Criteria")
 min_price, max_price = st.sidebar.slider(
-    "LTP Range (₹)",
-    min_value=10.0,
-    max_value=1000.0,
-    value=(30.0, 500.0),
-    step=5.0
+    "LTP Range (₹)", min_value=10.0, max_value=1000.0, value=(30.0, 500.0), step=5.0
 )
 
-# Bid and Ask Liquidity Filters
 apply_liquidity = st.sidebar.checkbox("Filter by Liquidity (Bid/Ask)", value=True)
 if apply_liquidity:
     min_bid = st.sidebar.number_input("Min Bid Quantity", min_value=0, value=1000000, step=100000)
@@ -50,8 +32,8 @@ if apply_liquidity:
 else:
     min_bid, min_ask = 0, 0
 
-# Limit the number of symbols scanned to speed up Streamlit load time, or scan full list
-scan_limit = st.sidebar.number_input("Maximum Stocks to Scan", min_value=10, max_value=2000, value=200)
+scan_limit = st.sidebar.number_input("Maximum Stocks to Scan", min_value=10, max_value=500, value=50)
+refresh_interval = st.sidebar.slider("Auto Refresh Interval (sec)", min_value=5, max_value=60, value=10, step=5)
 
 @st.cache_data(ttl=300)
 def load_and_fetch_stock_data(limit):
@@ -61,133 +43,84 @@ def load_and_fetch_stock_data(limit):
 with st.spinner("Fetching real-time stock prices..."):
     raw_data = load_and_fetch_stock_data(scan_limit)
 
-# Screen the stocks
+# Screen the stocks based on Price and Liquidity
 df_screened = screen_stocks(
-    raw_data,
-    min_price=min_price,
-    max_price=max_price,
-    min_bid_qty=min_bid,
-    min_ask_qty=min_ask
+    raw_data, min_price=min_price, max_price=max_price, min_bid_qty=min_bid, min_ask_qty=min_ask
 )
 
+# Batch calculate technical & volume metrics for screened stocks
+if not df_screened.empty:
+    with st.spinner("Calculating technical indicators & ETQs in batch..."):
+        batch_metrics = calculate_batch_metrics(df_screened['Ticker'].tolist())
+        
+    df_screened['SMMA(20)'] = df_screened['Ticker'].map(lambda x: batch_metrics.get(x, {}).get('smma20'))
+    df_screened['SMMA(120)'] = df_screened['Ticker'].map(lambda x: batch_metrics.get(x, {}).get('smma120'))
+    df_screened['ETQ 5m'] = df_screened['Ticker'].map(lambda x: batch_metrics.get(x, {}).get('etq5', 0))
+    df_screened['ETQ 20m'] = df_screened['Ticker'].map(lambda x: batch_metrics.get(x, {}).get('etq20', 0))
+    df_screened['ETQ 60m'] = df_screened['Ticker'].map(lambda x: batch_metrics.get(x, {}).get('etq60', 0))
+    df_screened['Avg Price 20m'] = df_screened['Ticker'].map(lambda x: batch_metrics.get(x, {}).get('avg20', 0.0))
+    df_screened['Avg Price 60m'] = df_screened['Ticker'].map(lambda x: batch_metrics.get(x, {}).get('avg60', 0.0))
 
 # Top KPI metrics
 if not df_screened.empty:
     col1, col2, col3, col4 = st.columns(4)
-    
     top_gainer = df_screened.loc[df_screened["Change (%)"].idxmax()]
     top_loser = df_screened.loc[df_screened["Change (%)"].idxmin()]
-    
     col1.metric("Total Scanned", f"{len(raw_data)}")
-    col2.metric("Screened (₹30-₹500)", f"{len(df_screened)}")
+    col2.metric("Screened", f"{len(df_screened)}")
     col3.metric("Top Gainer", f"{top_gainer['Symbol']}", f"+{top_gainer['Change (%)']}%")
     col4.metric("Top Loser", f"{top_loser['Symbol']}", f"{top_loser['Change (%)']}%")
 
-# Search and table display
-st.write("### Screened Stocks")
+# Search and tabular live dashboard display
+st.write("### 📊 Live Tabular Dashboard")
 search_term = st.text_input("🔍 Search symbol...", "")
-if search_term:
-    df_display = df_screened[df_screened["Symbol"].str.contains(search_term.upper(), na=False)]
-else:
-    df_display = df_screened
+df_display = df_screened[df_screened["Symbol"].str.contains(search_term.upper(), na=False)] if search_term else df_screened
 
+# Display all real-time parameters in one live table
 st.dataframe(df_display, use_container_width=True, hide_index=True)
 
-# Detailed analysis section
+# Technical analysis and detailed visualization section
 if not df_display.empty:
     st.write("---")
     st.write("### 🔍 Technical Chart & Analysis")
-    
-    selected_symbol = st.selectbox(
-        "Select a stock to analyze:",
-        options=df_display["Symbol"].tolist()
-    )
+    selected_symbol = st.selectbox("Select a stock to analyze:", options=df_display["Symbol"].tolist())
     
     if selected_symbol:
         ticker = f"{selected_symbol}.NS"
-        with st.spinner(f"Loading history for {selected_symbol}..."):
+        row = df_display[df_display["Symbol"] == selected_symbol].iloc[0]
+        
+        # Display all metrics side by side
+        c1, c2, c3 = st.columns(3)
+        c1.write("**📖 Market Depth**")
+        c1.success(f"Best Bid: ₹{row.get('Bid Price', 0.0):,.2f} ({int(row.get('Bid Qty', 0)):,})")
+        c1.error(f"Best Ask: ₹{row.get('Ask Price', 0.0):,.2f} ({int(row.get('Ask Qty', 0)):,})")
+        
+        c2.write("**📊 Exchange Traded Quantity (ETQ)**")
+        c2.info(f"Last 5m: {int(row.get('ETQ 5m', 0)):,}\n\nLast 20m: {int(row.get('ETQ 20m', 0)):,}\n\nLast 60m: {int(row.get('ETQ 60m', 0)):,}")
+        
+        c3.write("**💵 Average Price & Indicators**")
+        c3.info(f"Avg LTP 20m: ₹{row.get('Avg Price 20m', 0.0):,.2f}\n\nAvg LTP 60m: ₹{row.get('Avg Price 60m', 0.0):,.2f}\n\nSMMA(20): ₹{row.get('SMMA(20)'):,.2f}\n\nSMMA(120): ₹{row.get('SMMA(120)'):,.2f}")
+        
+        with st.spinner("Loading candlestick history..."):
             history = get_detailed_stock_history(ticker, period="1y", interval="1d")
             
         if not history.empty:
-            # Calculate technical indicators, ETQ, & Average Price
             history['SMMA20'] = calculate_smma(history['Close'], 20)
             history['SMMA120'] = calculate_smma(history['Close'], 120)
-            etq5, etq20, etq60 = calculate_etq(ticker)
-            avg20, avg60 = calculate_avg_price(ticker)
             
-            # Display latest SMMA values in metric columns
-            latest_price = history['Close'].iloc[-1]
-            latest_smma20 = history['SMMA20'].iloc[-1]
-            latest_smma120 = history['SMMA120'].iloc[-1]
-            
-            m1, m2, m3 = st.columns(3)
-            m1.metric("LTP (₹)", f"₹{latest_price:,.2f}")
-            m2.metric("SMMA (20)", f"₹{latest_smma20:,.2f}" if latest_smma20 is not None and not pd.isna(latest_smma20) else "N/A")
-            m3.metric("SMMA (120)", f"₹{latest_smma120:,.2f}" if latest_smma120 is not None and not pd.isna(latest_smma120) else "N/A")
-            
-            st.write("#### 📊 Exchange Traded Quantity (ETQ)")
-            e1, e2, e3 = st.columns(3)
-            e1.metric("ETQ (Last 5 mins)", f"{etq5:,}")
-            e2.metric("ETQ (Last 20 mins)", f"{etq20:,}")
-            e3.metric("ETQ (Last 60 mins)", f"{etq60:,}")
-            
-            st.write("#### 💵 Average Price (LTP)")
-            ap1, ap2 = st.columns(2)
-            ap1.metric("Avg Price (Last 20 mins)", f"₹{avg20:,.2f}")
-            ap2.metric("Avg Price (Last 60 mins)", f"₹{avg60:,.2f}")
-
-            st.write("#### 📖 Real-Time Market Depth")
-            stock_info = raw_data.get(ticker, {})
-            bid_price = stock_info.get("bid_price", 0.0)
-            bid_qty = stock_info.get("bid_qty", 0)
-            ask_price = stock_info.get("ask_price", 0.0)
-            ask_qty = stock_info.get("ask_qty", 0)
-            
-            col_bid, col_ask = st.columns(2)
-            with col_bid:
-                st.success(f"**Best Bid**\n\nPrice: ₹{bid_price:,.2f}\n\nQuantity: {bid_qty:,}")
-            with col_ask:
-                st.error(f"**Best Ask**\n\nPrice: ₹{ask_price:,.2f}\n\nQuantity: {ask_qty:,}")
-            
-            # Interactive Candlestick Chart
-
-
             fig = go.Figure()
             fig.add_trace(go.Candlestick(
-                x=history.index,
-                open=history['Open'],
-                high=history['High'],
-                low=history['Low'],
-                close=history['Close'],
-                name="Price"
+                x=history.index, open=history['Open'], high=history['High'], low=history['Low'], close=history['Close'], name="Price"
             ))
-            
-            # Add SMMA (20) line
-            fig.add_trace(go.Scatter(
-                x=history.index,
-                y=history['SMMA20'],
-                line=dict(color='#ff9f43', width=1.5),
-                name="SMMA 20"
-            ))
-            
-            # Add SMMA (120) line
-            fig.add_trace(go.Scatter(
-                x=history.index,
-                y=history['SMMA120'],
-                line=dict(color='#00d2d3', width=1.5),
-                name="SMMA 120"
-            ))
-            
+            fig.add_trace(go.Scatter(x=history.index, y=history['SMMA20'], line=dict(color='#ff9f43', width=1.5), name="SMMA 20"))
+            fig.add_trace(go.Scatter(x=history.index, y=history['SMMA120'], line=dict(color='#00d2d3', width=1.5), name="SMMA 120"))
             fig.update_layout(
-                title=f"{selected_symbol} - 1 Year Price & SMMA Trends",
-                template="plotly_dark",
-                xaxis_rangeslider_visible=False,
-                margin=dict(l=20, r=20, t=40, b=20),
-                height=450
+                title=f"{selected_symbol} - 1 Year Price & SMMA Trends", template="plotly_dark", xaxis_rangeslider_visible=False, height=450
             )
             st.plotly_chart(fig, use_container_width=True)
-        else:
-            st.warning("No historical data available for the selected symbol.")
-
 else:
     st.info("No stocks match the screening criteria.")
+
+# Auto-refresh loop
+time.sleep(refresh_interval)
+st.rerun()

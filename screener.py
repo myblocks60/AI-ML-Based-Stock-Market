@@ -100,4 +100,58 @@ def calculate_avg_price(ticker):
     except Exception:
         return 0.0, 0.0
 
+def calculate_batch_metrics(tickers):
+    """
+    Fetches daily and intraday data in batch, calculates SMMA, ETQ, and Average Price,
+    and returns a dictionary of metrics per ticker.
+    """
+    if not tickers:
+        return {}
+    
+    import yfinance as yf
+    import numpy as np
+    
+    metrics = {}
+    try:
+        daily_data = yf.download(tickers, period="1y", interval="1d", group_by="ticker", progress=False, threads=True)
+    except Exception:
+        daily_data = pd.DataFrame()
+        
+    try:
+        intra_data = yf.download(tickers, period="5d", interval="1m", group_by="ticker", progress=False, threads=True)
+    except Exception:
+        intra_data = pd.DataFrame()
+        
+    for ticker in tickers:
+        m = {
+            "smma20": None, "smma120": None,
+            "etq5": 0, "etq20": 0, "etq60": 0,
+            "avg20": 0.0, "avg60": 0.0
+        }
+        try:
+            if ticker in daily_data.columns.levels[0]:
+                closes = daily_data[ticker]['Close'].dropna()
+                if len(closes) >= 120:
+                    s20 = calculate_smma(closes, 20).iloc[-1]
+                    m["smma20"] = round(float(s20), 2) if s20 is not None and not np.isnan(s20) else None
+                    s120 = calculate_smma(closes, 120).iloc[-1]
+                    m["smma120"] = round(float(s120), 2) if s120 is not None and not np.isnan(s120) else None
+        except Exception:
+            pass
+            
+        try:
+            if ticker in intra_data.columns.levels[0]:
+                t_intra = intra_data[ticker].dropna(subset=['Close'])
+                if not t_intra.empty:
+                    m["etq5"] = int(t_intra['Volume'].iloc[-5:].sum()) if len(t_intra) >= 5 else int(t_intra['Volume'].sum())
+                    m["etq20"] = int(t_intra['Volume'].iloc[-20:].sum()) if len(t_intra) >= 20 else int(t_intra['Volume'].sum())
+                    m["etq60"] = int(t_intra['Volume'].iloc[-60:].sum()) if len(t_intra) >= 60 else int(t_intra['Volume'].sum())
+                    m["avg20"] = round(float(t_intra['Close'].iloc[-20:].mean()), 2) if len(t_intra) >= 20 else round(float(t_intra['Close'].mean()), 2)
+                    m["avg60"] = round(float(t_intra['Close'].iloc[-60:].mean()), 2) if len(t_intra) >= 60 else round(float(t_intra['Close'].mean()), 2)
+        except Exception:
+            pass
+        metrics[ticker] = m
+    return metrics
+
+
 
