@@ -1,8 +1,6 @@
 import pandas as pd
 import requests
 import io
-import yfinance as yf
-from concurrent.futures import ThreadPoolExecutor
 
 NSE_CSV_URL = "https://archives.nseindia.com/content/equities/EQUITY_L.csv"
 
@@ -34,109 +32,20 @@ def get_nse_symbols():
         "ONGC.NS", "ADANIPORTS.NS", "POWERGRID.NS", "COALINDIA.NS", "TATASTEEL.NS"
     ]
 
-def fetch_ltp_chunk(tickers):
+def fetch_all_nse_prices(symbols, fyers_token=None, fyers_client_id=None):
     """
-    Fetches the Last Traded Price (LTP) and other key info for a chunk of tickers using yfinance.
+    Fetches prices for all symbols using Fyers API quotes.
     """
-    if not tickers:
+    if not fyers_token or not fyers_client_id:
         return {}
-    
-    results = {}
-    try:
-        # yf.download is efficient for multiple tickers
-        # Period 1d is enough to get the latest close
-        data = yf.download(
-            tickers=tickers,
-            period="1d",
-            group_by="ticker",
-            threads=True,
-            progress=False
-        )
-        
-        for ticker in tickers:
-            try:
-                if ticker in data.columns.levels[0]:
-                    ticker_data = data[ticker]
-                    if not ticker_data.empty:
-                        # Get the last non-null close price
-                        close_col = 'Close' if 'Close' in ticker_data.columns else 'Adj Close'
-                        price = float(ticker_data[close_col].dropna().iloc[-1])
-                        
-                        # Calculate previous close if possible to get daily change percentage
-                        open_price = float(ticker_data['Open'].dropna().iloc[-1]) if 'Open' in ticker_data.columns else price
-                        change = ((price - open_price) / open_price) * 100 if open_price else 0.0
-                        volume = int(ticker_data['Volume'].dropna().iloc[-1]) if 'Volume' in ticker_data.columns else 0
-                        
-                        # Fetch bid, ask size and price from yfinance info
-                        # Since Yahoo Finance API may return 0/None during off-market hours or on free endpoints,
-                        # we simulate active order book values proportional to volume and price for testing.
-                        info = yf.Ticker(ticker).info
-                        bid_qty = int(info.get("bidSize", 0) or 0)
-                        ask_qty = int(info.get("askSize", 0) or 0)
-                        bid_price = float(info.get("bid", 0.0) or 0.0)
-                        ask_price = float(info.get("ask", 0.0) or 0.0)
-                        
-                        # LTQ (Last Traded Quantity) represents the quantity executed in the most recent trade
-                        ltq = int(info.get("lastVolume", 0) or 0)
-                        if ltq == 0:
-                            # Simulate live tick execution sizes changing dynamically with every market tick
-                            import random
-                            ltq = random.randint(50, 5000)
-                        
-                        if bid_qty == 0:
-                            bid_qty = int(volume * 0.15) if volume > 0 else 0
-                        if ask_qty == 0:
-                            ask_qty = int(volume * 0.18) if volume > 0 else 0
-                        if bid_price == 0.0:
-                            bid_price = round(price - 0.05, 2)
-                        if ask_price == 0.0:
-                            ask_price = round(price + 0.05, 2)
-                        
-                        results[ticker] = {
-                            "symbol": ticker.replace(".NS", ""),
-                            "ltp": price,
-                            "change_pct": change,
-                            "volume": volume,
-                            "bid_qty": bid_qty,
-                            "ask_qty": ask_qty,
-                            "bid_price": bid_price,
-                            "ask_price": ask_price,
-                            "ltq": ltq
-                        }
 
-
-            except Exception:
-                continue
-
-    except Exception as e:
-        print(f"Error in batch download: {e}")
-        
-    return results
-
-def fetch_all_nse_prices(symbols, chunk_size=100, max_workers=5, fyers_token=None, fyers_client_id=None):
-    """
-    Fetches prices for all symbols using Fyers if authenticated, otherwise multi-threaded Yahoo Finance.
-    """
-    if fyers_token and fyers_client_id:
-        fyers_syms = [f"NSE:{sym.replace('.NS', '')}-EQ" for sym in symbols]
-        chunk_size_fyers = 50
-        chunks = [fyers_syms[i:i + chunk_size_fyers] for i in range(0, len(fyers_syms), chunk_size_fyers)]
-        from fyers_client import fetch_fyers_quotes
-        all_results = {}
-        for chunk in chunks:
-            res = fetch_fyers_quotes(fyers_token, fyers_client_id, chunk)
-            all_results.update(res)
-        return all_results
-
-    chunks = [symbols[i:i + chunk_size] for i in range(0, len(symbols), chunk_size)]
+    fyers_syms = [f"NSE:{sym.replace('.NS', '')}-EQ" for sym in symbols]
+    chunk_size_fyers = 50
+    chunks = [fyers_syms[i:i + chunk_size_fyers] for i in range(0, len(fyers_syms), chunk_size_fyers)]
+    from fyers_client import fetch_fyers_quotes
     all_results = {}
-    with ThreadPoolExecutor(max_workers=max_workers) as executor:
-        futures = {executor.submit(fetch_ltp_chunk, chunk): chunk for chunk in chunks}
-        for future in futures:
-            try:
-                res = future.result()
-                all_results.update(res)
-            except Exception as e:
-                print(f"Chunk fetch error: {e}")
+    for chunk in chunks:
+        res = fetch_fyers_quotes(fyers_token, fyers_client_id, chunk)
+        all_results.update(res)
     return all_results
 

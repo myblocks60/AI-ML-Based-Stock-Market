@@ -51,7 +51,7 @@ if st.session_state["fyers_token"]:
         st.session_state["fyers_token"] = None
         st.rerun()
 else:
-    st.sidebar.info("🔴 Running Demo Mode (YFinance)")
+    st.sidebar.warning("⚠️ Fyers Broker authentication required")
     fyers_client_id = st.sidebar.text_input("App ID (Client ID)", value=st.session_state["fyers_client_id"], type="password")
     fyers_secret = st.sidebar.text_input("Secret ID", type="password")
 
@@ -74,6 +74,10 @@ else:
                     st.rerun()
         except Exception as e:
             st.sidebar.error(f"Config Error: {e}")
+
+if not st.session_state["fyers_token"]:
+    st.warning("🔒 Please authenticate with Fyers Broker in the sidebar to fetch real-time NSE stock data.")
+    st.stop()
 
 @st.cache_data(ttl=10)
 def load_and_fetch_stock_data(limit, fyers_token, fyers_client_id):
